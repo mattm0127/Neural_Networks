@@ -18,7 +18,7 @@ model = CatDogCNN().to(device)
 model.load_state_dict(torch.load('catdog.pth', weights_only=True))
 model.eval()
 
-def predict(img_path, model):
+def predict(model, img_path):
     img = Image.open(img_path).convert("RGB")
     img_tensor = inference_transform(img)
     img_tensor = img_tensor.unsqueeze(0).to(device)
@@ -29,12 +29,15 @@ def predict(img_path, model):
         probabilities = torch.nn.functional.softmax(output, dim=1)
         confidence, predicted = torch.max(probabilities, 1)
 
-    classes = ['cat', 'dog']
-    result = classes[predicted.item()]
+    if confidence < .80:
+        result = 'No Animal Detected'
+    else:
+        classes = ['cat', 'dog']
+        result = classes[predicted.item()]
     print(f"Prediction: {result} ({confidence.item()*100:.2f}%)")
 
 
-def display_layer(model, img_path, layer_num=0):
+def display_layer(model, img_path, layer=0):
 
 
     activations = {}
@@ -42,7 +45,7 @@ def display_layer(model, img_path, layer_num=0):
         # This grabs the output of the layer as it flies by
         activations['features'] = output.detach()
 
-    target_layer = model.features[layer_num] 
+    target_layer = model.features[layer] 
     target_layer.register_forward_hook(hook_fn)
 
     img = Image.open(img_path).convert("RGB")
@@ -60,7 +63,7 @@ def display_layer(model, img_path, layer_num=0):
         if i < act.shape[0]:
             ax.imshow(act[i].cpu().numpy(), cmap='magma')
             ax.axis('off')
-    plt.suptitle("What the Model Sees (Deep Features)")
+    plt.suptitle(f"What the Model Sees At Layer {layer}")
     plt.show()
 
-display_layer(model, r"C:\Users\mattm\Downloads\PXL_20231111_185738680.jpg", )
+display_layer(model, r"C:\Users\mattm\Downloads\PXL_20240225_143314278.PORTRAIT.jpg", layer=18)
