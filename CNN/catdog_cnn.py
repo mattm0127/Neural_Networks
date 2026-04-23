@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 from torchvision.transforms import v2
 import kagglehub
@@ -59,18 +59,22 @@ class CatDogCNN(nn.Module):
             nn.ReLU(),
             nn.MaxPool2d(2, 2),
             #Block 4 - 16x16 -> 8x8
-            nn.Conv2d(128, 128, kernel_size=3, padding=1),
-            nn.BatchNorm2d(128),
+            nn.Conv2d(128, 256, kernel_size=3, padding=1),
+            nn.BatchNorm2d(256),
             nn.ReLU(),
             nn.MaxPool2d(2, 2)
         )
         
         self.classifier = nn.Sequential(
+            nn.AdaptiveAvgPool2d(1),
             nn.Flatten(),
-            nn.Linear(128*8*8, 64),
+            nn.Linear(256, 512),
+            nn.ReLU(),
+            nn.Dropout(0.6),
+            nn.Linear(512, 128),
             nn.ReLU(),
             nn.Dropout(0.5),
-            nn.Linear(64, 2)
+            nn.Linear(128, 2)
         )
     
     def forward(self, x):
@@ -112,14 +116,18 @@ def get_data(root_path):
 
     train_loader = DataLoader(
         train_dataset, 
-        batch_size=128, 
+        batch_size=64, 
         shuffle=True,
+        num_workers=0,
+        pin_memory=True
     )
 
     test_loader = DataLoader(
         test_dataset,
-        batch_size=128,
-        shuffle=False
+        batch_size=64,
+        shuffle=False,
+        num_workers=0,
+        pin_memory=True
     )
 
     print(f"Classes: {train_dataset.classes}")
@@ -128,9 +136,10 @@ def get_data(root_path):
 
     return train_loader, test_loader
 
-def train(model, train_loader, criterion, optimizer, epochs=1):
-    model.train()
+def train(model, train_loader, criterion, optimizer, scheduler, epochs=1):
+    top_accuracy = 0
     for epoch in range(epochs):
+        model.train()
         for data, target in train_loader:
             data, target = data.to(device), target.to(device)
             optimizer.zero_grad()
@@ -138,13 +147,21 @@ def train(model, train_loader, criterion, optimizer, epochs=1):
             loss = criterion(output, target)
             loss.backward()
             optimizer.step()
-            
+
+        accuracy = test(model, test_loader)
+        scheduler.step(accuracy)
+
+        if accuracy > top_accuracy:
+            top_accuracy = accuracy
+            torch.save(model.state_dict(), 'catdog.pth')
+
         if (epoch + 1) % 5 == 0:
-            print(f"Epoch {epoch + 1} | Loss: {loss.item()}")
-            test(model, test_loader)
+            print(f"Epoch {epoch + 1} | Loss: {loss.item()} | Accuracy: {accuracy:2f} | Learning Rate: {optimizer.param_groups[0]['lr']}")
+            
 
 def test(model, test_loader):
     model.eval()
+    total = len(test_loader.dataset)
     correct = 0
     with torch.no_grad():
         for data, target in test_loader:
@@ -153,16 +170,17 @@ def test(model, test_loader):
             pred = output.argmax(dim=1, keepdim=True)
             correct += pred.eq(target.view_as(pred)).sum().item()
 
-    print(f'\nTest set: Accuracy: {correct}/{len(test_loader.dataset)} ({100. * correct / len(test_loader.dataset):.2f}%)\n')
+    return correct / total
 
-model = CatDogCNN().to(device)
-train_loader, test_loader = get_data(path)
 
-criterion = nn.CrossEntropyLoss()
-optimizer = optim.Adam(model.parameters(), lr=0.0005)
+if __name__ == "__main__":
+    model = CatDogCNN().to(device)
+    train_loader, test_loader = get_data(path)
 
-train(model, train_loader, criterion, optimizer, epochs=15)
-test(model, test_loader)
-torch.save(model.state_dict(), 'catdog.pth')
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.Adam(model.parameters(), lr=0.001, weight_decay=1e-4)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', patience=5, factor=0.5)
+    train(model, train_loader, criterion, optimizer, scheduler, epochs=50)
+
 
 
