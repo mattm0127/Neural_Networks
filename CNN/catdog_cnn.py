@@ -67,12 +67,10 @@ class CatDogCNN(nn.Module):
         
         self.classifier = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(128*8*8, 512),
+            nn.Linear(128*8*8, 64),
             nn.ReLU(),
             nn.Dropout(0.5),
-            nn.Linear(512, 128),
-            nn.ReLU(),
-            nn.Linear(128, 2)
+            nn.Linear(64, 2)
         )
     
     def forward(self, x):
@@ -163,7 +161,7 @@ train_loader, test_loader = get_data(path)
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=0.0005)
 
-train(model, train_loader, criterion, optimizer, epochs=30)
+train(model, train_loader, criterion, optimizer, epochs=15)
 test(model, test_loader)
 torch.save(model.state_dict(), 'catdog.pth')
 
