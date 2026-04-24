@@ -69,7 +69,7 @@ def display_layer(model, img_path, layer=0):
     fig, axes = plt.subplots(15, 18, figsize=(10, 10))
     for i, ax in enumerate(axes.flat):
         if i < act.shape[0]:
-            ax.imshow(act[i].cpu().numpy(), cmap='Grays')
+            ax.imshow(act[i].cpu().numpy(), cmap="Grays")
             ax.axis('off')
     plt.suptitle(f"What the Model Sees At Layer {layer}")
     plt.show()
