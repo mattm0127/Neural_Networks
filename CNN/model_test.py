@@ -25,7 +25,7 @@ def predict(model, img_path):
 
 
     with torch.no_grad(): # Don't track gradients (saves memory)
-        output = model(img_tensor)
+        output: torch.Tensor = model(img_tensor)
         probabilities = torch.nn.functional.softmax(output, dim=1)
         confidence, predicted = torch.max(probabilities, 1)
 
@@ -34,11 +34,10 @@ def predict(model, img_path):
     else:
         classes = ['cat', 'dog']
         result = classes[predicted.item()]
-    print(f"Prediction: {result} ({confidence.item()*100:.2f}%)")
+    print(f"Prediction: {result}")
 
 
 def display_layer(model, img_path, layer=0):
-
 
     activations = {}
     def hook_fn(model, input, output):
@@ -61,9 +60,9 @@ def display_layer(model, img_path, layer=0):
     fig, axes = plt.subplots(4, 8, figsize=(10, 10))
     for i, ax in enumerate(axes.flat):
         if i < act.shape[0]:
-            ax.imshow(act[i].cpu().numpy(), cmap='magma')
+            ax.imshow(act[i].cpu().numpy(), cmap='Grays')
             ax.axis('off')
     plt.suptitle(f"What the Model Sees At Layer {layer}")
     plt.show()
 
-display_layer(model, r"C:\Users\mattm\Downloads\PXL_20240225_143314278.PORTRAIT.jpg", layer=18)
+display_layer(model, r"C:\Users\mattm\Downloads\PXL_20240225_143314278.PORTRAIT.jpg")

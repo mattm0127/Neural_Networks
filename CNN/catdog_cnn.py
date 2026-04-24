@@ -136,7 +136,7 @@ def get_data(root_path):
 
     return train_loader, test_loader
 
-def train(model, train_loader, criterion, optimizer, scheduler, epochs=1):
+def train(model, train_loader, test_loader, criterion, optimizer, scheduler, epochs=1):
     top_accuracy = 0
     for epoch in range(epochs):
         model.train()
@@ -166,7 +166,7 @@ def test(model, test_loader):
     with torch.no_grad():
         for data, target in test_loader:
             data, target = data.to(device), target.to(device)
-            output = model(data)
+            output: torch.Tensor = model(data)
             pred = output.argmax(dim=1, keepdim=True)
             correct += pred.eq(target.view_as(pred)).sum().item()
 
@@ -180,7 +180,7 @@ if __name__ == "__main__":
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001, weight_decay=1e-4)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', patience=5, factor=0.5)
-    train(model, train_loader, criterion, optimizer, scheduler, epochs=50)
+    train(model, train_loader, test_loader, criterion, optimizer, scheduler, epochs=50)
 
 
 
