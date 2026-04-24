@@ -22,7 +22,7 @@ class CatDogCNN(nn.Module):
 
         self.gpu_train_transform = v2.Compose([
             # Spacial Variations
-            v2.RandomResizedCrop(128, scale=(0.7, 1.0)),
+            v2.RandomResizedCrop(128, scale=(0.5, 1.0)),
             v2.RandomHorizontalFlip(p=0.5),
             v2.RandomRotation(25),
             #  appearance variations
@@ -33,6 +33,7 @@ class CatDogCNN(nn.Module):
                 hue=0.1
             ),
             v2.ToDtype(torch.float32, scale=True),
+            v2.RandomErasing(p=0.2),
             v2.Normalize((0.5, 0.5, 0.5),
                                 (0.5, 0.5, 0.5))
         ])
@@ -62,13 +63,18 @@ class CatDogCNN(nn.Module):
             nn.Conv2d(128, 256, kernel_size=3, padding=1),
             nn.BatchNorm2d(256),
             nn.ReLU(),
+            nn.MaxPool2d(2, 2),
+            #Block 5 - 8x8 -> 4x4
+            nn.Conv2d(256, 512, kernel_size=3, padding=1),
+            nn.BatchNorm2d(512),
+            nn.ReLU(),
             nn.MaxPool2d(2, 2)
         )
         
         self.classifier = nn.Sequential(
             nn.AdaptiveAvgPool2d(1),
             nn.Flatten(),
-            nn.Linear(256, 512),
+            nn.Linear(512, 512),
             nn.ReLU(),
             nn.Dropout(0.6),
             nn.Linear(512, 128),
@@ -94,14 +100,10 @@ def get_data(root_path):
     cpu_transform = v2.Compose([
         v2.ToImage(),
         v2.ToDtype(torch.uint8, scale=True),
-        v2.Resize((128, 128))
     ])
 
     transform_test = transforms.Compose([
-        transforms.Resize((128, 128)),
         transforms.ToTensor(),
-        transforms.Normalize((0.5, 0.5, 0.5),
-                             (0.5, 0.5, 0.5))
     ])
 
     train_dataset = datasets.ImageFolder(
@@ -116,17 +118,19 @@ def get_data(root_path):
 
     train_loader = DataLoader(
         train_dataset, 
-        batch_size=64, 
+        batch_size=128, 
         shuffle=True,
-        num_workers=0,
+        num_workers=2,
+        persistent_workers=True,
         pin_memory=True
     )
 
     test_loader = DataLoader(
         test_dataset,
-        batch_size=64,
+        batch_size=128,
         shuffle=False,
-        num_workers=0,
+        num_workers=2,
+        persistent_workers=True,
         pin_memory=True
     )
 
@@ -141,7 +145,7 @@ def train(model, train_loader, test_loader, criterion, optimizer, scheduler, epo
     for epoch in range(epochs):
         model.train()
         for data, target in train_loader:
-            data, target = data.to(device), target.to(device)
+            data, target = data.to(device, non_blocking=True), target.to(device, non_blocking=True)
             optimizer.zero_grad()
             output = model(data)
             loss = criterion(output, target)

@@ -5,7 +5,12 @@ from PIL import Image, ImageOps
 import matplotlib.pyplot as plt
 
 
-device = torch.device('xpu' if torch.xpu.is_available() else 'cpu')
+if torch.cuda.is_available():
+    device = 'cuda'
+elif torch.xpu.is_available():
+    device = 'xpu'
+else:
+    device = 'cpu'
 
 inference_transform = v2.Compose([
     v2.ToImage(),
@@ -15,7 +20,11 @@ inference_transform = v2.Compose([
 
 model = CatDogCNN().to(device)
 
-model.load_state_dict(torch.load('catdog.pth', weights_only=True))
+model.load_state_dict(torch.load(
+    r"C:\Users\mattm\OneDrive\Desktop\PyTorch Models\CNN\catdog_93.pth",
+    map_location=device, 
+    weights_only=True
+))
 model.eval()
 
 def predict(model, img_path):
@@ -29,12 +38,12 @@ def predict(model, img_path):
         probabilities = torch.nn.functional.softmax(output, dim=1)
         confidence, predicted = torch.max(probabilities, 1)
 
-    if confidence < .80:
+    if confidence < .85:
         result = 'No Animal Detected'
     else:
         classes = ['cat', 'dog']
         result = classes[predicted.item()]
-    print(f"Prediction: {result}")
+    print(f"Prediction: {result} | Confidence: {confidence.item()*100:.2f}")
 
 
 def display_layer(model, img_path, layer=0):
@@ -57,7 +66,7 @@ def display_layer(model, img_path, layer=0):
         _ = model(img_tensor)
 
     act = activations['features'].squeeze()
-    fig, axes = plt.subplots(4, 8, figsize=(10, 10))
+    fig, axes = plt.subplots(15, 18, figsize=(10, 10))
     for i, ax in enumerate(axes.flat):
         if i < act.shape[0]:
             ax.imshow(act[i].cpu().numpy(), cmap='Grays')
@@ -65,4 +74,4 @@ def display_layer(model, img_path, layer=0):
     plt.suptitle(f"What the Model Sees At Layer {layer}")
     plt.show()
 
-display_layer(model, r"C:\Users\mattm\Downloads\PXL_20240225_143314278.PORTRAIT.jpg")
+display_layer(model, r"C:\Users\mattm\Downloads\PXL_20211030_022346138.PORTRAIT.jpg", 16)
