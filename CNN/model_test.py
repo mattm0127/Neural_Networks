@@ -47,7 +47,7 @@ def predict(model, img_path):
     else:
         classes = ["cat", "dog"]
         result = classes[predicted.item()]
-    print(f"Prediction: {result} | Confidence: {confidence.item() * 100:.2f}")
+    print(f"Prediction: {result} | Confidence: {confidence.item() * 100:.2f}%")
 
 
 def display_layer(model, img_path, layer=0):
@@ -67,12 +67,14 @@ def display_layer(model, img_path, layer=0):
     img_tensor = img_tensor.unsqueeze(0).to(device)
 
     with torch.no_grad():
-        # Pass in a single image from your test set
+        # Pass in a single image
         _ = model(img_tensor)
 
     act = activations["features"].squeeze()
-    grid = int(math.sqrt(act.shape[0] / 2))
-    fig, axes = plt.subplots(grid, grid, figsize=(10, 10))
+    feature_ct = act.shape[0]
+    cols = 8 if feature_ct <= 64 else 16
+    rows =  int(feature_ct / cols)
+    fig, axes = plt.subplots(rows, cols, figsize=(10, 10))
     for i, ax in enumerate(axes.flat):
         if i < act.shape[0]:
             ax.imshow(act[i].cpu().numpy(), cmap="gist_gray")
@@ -81,6 +83,24 @@ def display_layer(model, img_path, layer=0):
     plt.show()
 
 
-display_layer(
-    model, r"C:\Users\mattm\Downloads\PXL_20250714_113507485.jpg", 0
-)
+if __name__ ==  "__main__":
+
+    while True:
+        print("What would you like to do?")
+        print("\t1) Make a prediction")
+        print("\t2) See an output layer")
+        user_choice = int(input("Please Select Enter the number that corresponds: "))
+        if user_choice == 1:
+            print("\nPlease copy and paste the PATH to your image")
+            user_path = input(":").strip('"')
+            predict(
+                model, user_path
+            )
+        elif user_choice == 2:
+            print("\nPlease copy and paste the PATH to your image")
+            user_path = input(":").strip('"')
+            user_layer = int(input("There are a total of 20 Layers, Convolutions are every 4th layer: ")) - 1
+            display_layer(model, user_path, user_layer)
+        
+        if input("Press Enter for another, type q to quit: "):
+            break
