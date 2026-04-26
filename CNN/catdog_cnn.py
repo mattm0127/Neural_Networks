@@ -29,7 +29,7 @@ class CatDogCNN(nn.Module):
                 v2.RandomResizedCrop(128, scale=(0.5, 1.0)),
                 v2.RandomHorizontalFlip(p=0.5),
                 v2.RandomRotation(25),
-                #  appearance variations
+                # Appearance Variations
                 v2.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3, hue=0.1),
                 v2.ToDtype(torch.float32, scale=True),
                 v2.RandomErasing(p=0.2),
