@@ -3,7 +3,7 @@ import torch
 from torchvision.transforms import v2
 from PIL import Image, ImageOps
 import matplotlib.pyplot as plt
-import math
+
 
 if torch.cuda.is_available():
     device = "cuda"
