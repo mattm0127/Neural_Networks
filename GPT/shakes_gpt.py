@@ -3,19 +3,39 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch import nn
 from pathlib import Path
+import kagglehub
 
-import tiktoken
-import string
 import time
+import string
+
+
+class Tokenizer:
+    def __init__(self, text):
+        self.text = text
+        self.vocab, self.vocab_size = self._generate_vocab()
+        self.word_map = {w: i for i, w in enumerate(self.vocab)}
+        self.int_map = {i: w for i, w in enumerate(self.vocab)}
+
+    def _generate_vocab(self):
+        vocab = sorted(list(set(string.printable + self.text)))
+        return vocab, len(vocab)
+    
+    def encode(self, x: str) -> list[int]:
+        return [self.word_map[i] for i in x]
+
+    def decode(self, x: list[int]) -> str:
+        if isinstance (x, torch.Tensor):
+            x = x.tolist()
+        decode_text = [self.int_map[i] for i in x]
+        return "".join(decode_text)
 
 
 class DataManager:
     def __init__(self, data_path):
         self.data_path = Path(data_path)
-        self.text = self.data_path.read_text(encoding="utf-8")
+        self.text = self.data_path.read_text(encoding="utf-8").lower()
         self.device = self._get_device()
-        self.tokenizer = tiktoken.get_encoding('gpt2')
-        self.vocab_size = self.tokenizer.n_vocab
+        self.tokenizer = Tokenizer(self.text)
         self.train_data, self.test_data = self._split_data()
 
     def _get_device(self):
@@ -26,33 +46,17 @@ class DataManager:
         else:
             return torch.device("cpu")
 
-    def _tokenize_vocab(
-        self,
-    ) -> tuple[int, dict[str, int], dict[int, str]]:
-        chars = sorted(list(set(string.printable + self.text)))
-        vocab_size = len(chars)
-        char_map = {c: i for i, c in enumerate(chars)}
-        int_map = {i: c for i, c in enumerate(chars)}
-
-        return vocab_size, char_map, int_map
-
     def _split_data(self) -> tuple[torch.Tensor, torch.Tensor]:
 
-        encoded_text = torch.tensor(self.encode(self.text), dtype=torch.long)
+        encoded_text = torch.tensor(
+            self.tokenizer.encode(self.text), dtype=torch.long
+        )
         n = int(len(encoded_text) * 0.9)
 
         train_data = encoded_text[:n]
         test_data = encoded_text[n:]
 
         return train_data, test_data
-
-    def encode(self, x: str) -> list[int]:
-        return self.tokenizer.encode(x)
-
-    def decode(self, x: list[int]) -> str:
-        if isinstance (x, torch.Tensor):
-            x = x.tolist()
-        return self.tokenizer.decode(x)
 
     def get_batch(
         self, mode: str, batch_size=4, block_size=8
@@ -149,7 +153,7 @@ class Block(nn.Module):
         return x
 
 
-class NanoGPT(nn.Module):
+class ShakesGPT(nn.Module):
     def __init__(
         self,
         vocab_size: int,
@@ -195,7 +199,7 @@ class NanoGPT(nn.Module):
 
     @torch.no_grad()
     def generate(
-        self, idx: torch.Tensor, max_new_tokens: int, block_size: int, temp: float = 1.0
+        self, idx: torch.Tensor, max_new_tokens: int, block_size: int, temp: float = 1.0, top_k:int = 5
     ):
         self.eval()
         for _ in range(max_new_tokens):
@@ -203,6 +207,10 @@ class NanoGPT(nn.Module):
 
             logits, _ = self(idx_crop)
             logits = logits[:, -1, :] / temp
+
+            if top_k is not None:
+                v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
+                logits[logits < v[:, [-1]]] = -float('inf')
 
             probs = F.softmax(logits, dim=-1)
 
@@ -213,43 +221,41 @@ class NanoGPT(nn.Module):
 
 
 def train(
-    model: NanoGPT,
+    model: ShakesGPT,
     dm: DataManager,
     optimizer: optim.Optimizer,
+    scheduler: optim.lr_scheduler.LRScheduler,
     batch_size: int,
     block_size: int,
     max_steps: int,
     eval_interval: int,
     eval_iters: int,
 ) -> None:
-    print("Starting Training")
-    start_time = time.perf_counter()
     threshold = float('inf')
     save_weights: dict[str, torch.Tensor] = model.state_dict()
     for step in range(max_steps):
         if step == 0 or (step + 1) % eval_interval == 0:
             losses = estimate_loss(model, dm, eval_iters, batch_size, block_size)
             print(
-                f"Step:{step + 1} | Training Loss: {losses['train']:.4f} | Testing Loss: {losses['test']:.4f}"
+                f"Step:{step + 1} | Training Loss: {losses['train']:.4f} | Testing Loss: {losses['test']:.4f} | Learning Rate: {optimizer.param_groups[0]['lr']}"
             )
+            if losses['test'] < threshold:
+                threshold = losses['test']
+                save_weights = model.state_dict()
 
         x, y = dm.get_batch("train", batch_size, block_size)
         logits, loss = model(x, targets=y)
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
+        scheduler.step()
 
-        if loss.item() < threshold:
-            threshold = loss.item()
-            save_weights = model.state_dict()
-
-    print(f"Training Completed. Elapsed Time: {time.perf_counter() - start_time}")
-    torch.save(save_weights, 'nanoGPT.pth')
+    torch.save(save_weights, 'ShakesGPT.pth')
     print(f"Model saved with loss of {threshold}")
 
 @torch.no_grad()
 def estimate_loss(
-    model: NanoGPT, dm: DataManager, eval_iters: int, batch_size: int, block_size: int
+    model: ShakesGPT, dm: DataManager, eval_iters: int, batch_size: int, block_size: int
 ) -> dict[str, float]:
     out = {}
     model.eval()
@@ -265,27 +271,37 @@ def estimate_loss(
 
 
 if __name__ == "__main__":
-    path = r"LSTM\training_data\tiny_shakespear.txt"
+    path = r"C:\Users\mattm\Documents\py_projects\Neural_Networks\LSTM\training_data\tiny_shakespear.txt"
     dm = DataManager(path)
 
     batch_size = 64
-    block_size = 64
-    max_steps = 500
+    block_size = 256
+    max_steps = 3000
     eval_interval = 500
     eval_iters = 100
+    val = dm.tokenizer.vocab_size
+    pretrained = None
 
-    model = NanoGPT(
-        dm.vocab_size, embed_size=256, block_size=block_size, num_heads=4, num_layers=4
+    model = ShakesGPT(
+        dm.tokenizer.vocab_size, embed_size=128, block_size=block_size, num_heads=4, num_layers=4
     ).to(dm.device)
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
 
-    train(
-        model, dm, optimizer, batch_size, block_size, max_steps, eval_interval, eval_iters
-    )
+    if pretrained is None:
+        optimizer = optim.AdamW(model.parameters(), lr=0.001, weight_decay=0.01)
+        scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max_steps, eta_min=0)
+        print("Starting Training")
+        start_time = time.perf_counter()
+        train(
+            model, dm, optimizer, scheduler, batch_size, block_size, max_steps, eval_interval, eval_iters
+        )
+        print(f"Training Completed. Elapsed Time: {time.perf_counter() - start_time}")
+    else:
+        print(f"Loading Model: {pretrained.split('\\')[-1]}")
+        model.load_state_dict(torch.load(pretrained))
 
     print("\nGenerating New Text")
-    context = torch.tensor([dm.encode("\n")], dtype=torch.long, device=dm.device)
+    context = torch.tensor([dm.tokenizer.encode("brian: thou are a")], dtype=torch.long, device=dm.device)
 
-    generated_indices = model.generate(context, 500, block_size)
+    generated_indices = model.generate(context, 1500, block_size)
 
-    print(dm.decode(generated_indices[0]))
+    print(dm.tokenizer.decode(generated_indices[0]))
