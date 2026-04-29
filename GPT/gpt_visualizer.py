@@ -54,8 +54,8 @@ class ModelManager:
 
 class GPTVisualizer:
 
-    WEIGHT_PATH = r"C:\Users\mattm\Documents\py_projects\Neural_Networks\ShakesGPT.pth"
-    DATA_PATH = r"C:\Users\mattm\Documents\py_projects\Neural_Networks\LSTM\training_data\tiny_shakespear.txt"
+    WEIGHT_PATH = r"ShakesGPT.pth"
+    DATA_PATH = r"LSTM\training_data\tiny_shakespear.txt"
 
     def __init__(self, prompt: str):
         pygame.init()
