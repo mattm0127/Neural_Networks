@@ -10,11 +10,12 @@ import string
 
 
 class Tokenizer:
-    def __init__(self, text):
+    def __init__(self, text, device):
         self.text = text
         self.vocab, self.vocab_size = self._generate_vocab()
         self.word_map = {w: i for i, w in enumerate(self.vocab)}
         self.int_map = {i: w for i, w in enumerate(self.vocab)}
+        self.device = device
 
     def _generate_vocab(self):
         vocab = sorted(list(set(string.printable + self.text)))
@@ -28,14 +29,17 @@ class Tokenizer:
             x = x.tolist()
         decode_text = [self.int_map[i] for i in x]
         return "".join(decode_text)
+    
+    def to_tensor(self, x: list[int])->torch.Tensor:
+        return torch.tensor([x], dtype=torch.long, device=self.device)
 
 
 class DataManager:
     def __init__(self, data_path):
         self.data_path = Path(data_path)
-        self.text = self.data_path.read_text(encoding="utf-8").lower()
+        self.text = self.data_path.read_text(encoding="utf-8")
         self.device = self._get_device()
-        self.tokenizer = Tokenizer(self.text)
+        self.tokenizer = Tokenizer(self.text, self.device)
         self.train_data, self.test_data = self._split_data()
 
     def _get_device(self):
