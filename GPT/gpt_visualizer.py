@@ -40,7 +40,6 @@ class ModelManager:
         self.model.token_embedding_table.register_forward_hook(get_activation('Token Embedding'))
         for i, block in enumerate(self.model.blocks):
             block.register_forward_hook(get_activation(f"Transformer Block {i+1}"))
-            block.ffwd.reg
         self.model.ln_f.register_forward_hook(get_activation('LN Final'))
         self.model.lm_head.register_forward_hook(get_activation("Head Output"))
 
@@ -124,6 +123,6 @@ class GPTVisualizer:
 
 
 if __name__ == "__main__":
-    gv = GPTVisualizer('how many letters until. ')
+    gv = GPTVisualizer('Brian :  ')
     gv.run_visualization()
     
