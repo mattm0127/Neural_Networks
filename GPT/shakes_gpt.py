@@ -3,7 +3,6 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch import nn
 from pathlib import Path
-import kagglehub
 
 import time
 import string
@@ -278,13 +277,13 @@ if __name__ == "__main__":
     path = r"LSTM\training_data\tiny_shakespear.txt"
     dm = DataManager(path)
 
-    batch_size = 64
-    block_size = 256
-    max_steps = 3000
+    batch_size = 64 
+    block_size = 500 #256
+    max_steps = 5000
     eval_interval = 500
     eval_iters = 100
     val = dm.tokenizer.vocab_size
-    pretrained = None
+    pretrained = "ShakesGPT.pth"
 
     model = ShakesGPT(
         dm.tokenizer.vocab_size, embed_size=128, block_size=block_size, num_heads=4, num_layers=4
@@ -304,7 +303,7 @@ if __name__ == "__main__":
         model.load_state_dict(torch.load(pretrained))
 
     print("\nGenerating New Text")
-    context = torch.tensor([dm.tokenizer.encode("brian: thou are a")], dtype=torch.long, device=dm.device)
+    context = torch.tensor([dm.tokenizer.encode("BRIAN:\nThou are a")], dtype=torch.long, device=dm.device)
 
     generated_indices = model.generate(context, 1500, block_size)
 

@@ -16,7 +16,7 @@ class ModelManager:
         self.model = ShakesGPT(
             self.dm.tokenizer.vocab_size,
             embed_size=128,
-            block_size=256,
+            block_size=500,
             num_heads=4,
             num_layers=4
         ).to(self.dm.device)
@@ -80,12 +80,10 @@ class GPTVisualizer:
         act_min, act_max = act.min().item(), act.max().item()
         act_range = max(act_max - act_min, 1e-5)
 
-        surface = pygame.Surface((self.screen.get_width()-20, self.screen.get_height()-80))
+        surface = pygame.Surface((3840, 2160))
         surface.fill((0, 0, 0))
-        surface_rect = surface.get_rect()
-        surface_rect.center = self.screen_rect.center
-        r_height = (self.screen.get_height()-80) / block_size
-        r_width = (self.screen.get_width()-20) / embed_size
+        r_height = 2160 / block_size
+        r_width = 3840 / embed_size
 
         for x in range(block_size):
             for y in range(embed_size):
@@ -94,8 +92,11 @@ class GPTVisualizer:
                 val = act[x, y].item()
                 color_intensity = int(255 * (val - act_min) / act_range)
                 color = (0 + color_intensity, 0 + color_intensity, 0 + color_intensity)
-                pygame.draw.circle(surface, color, (center_x, center_y), 4)
-        return surface, surface_rect
+                if color_intensity > 125:
+                    pygame.draw.circle(surface, color, (center_x, center_y), 12)
+                else:
+                    pygame.draw.circle(surface, color, (center_x, center_y), 12, 1)
+        return surface
 
     def draw_title(self, text):
         font = pygame.font.SysFont('sysfont', 25)
@@ -112,7 +113,11 @@ class GPTVisualizer:
         while True:
             self._check_events()
             self.screen.fill((0,0,0))
-            self.screen.blit(*self.network_layers[act_list[idx]])
+            screen_rect = self.screen.get_rect()
+            layer = self.network_layers[act_list[idx]]
+            t_layer = pygame.transform.smoothscale(layer, (self.screen.get_width()-20, self.screen.get_height()-80))
+            t_layer_rect = t_layer.get_rect(center=screen_rect.center)
+            self.screen.blit(t_layer, t_layer_rect)
             self.draw_title(act_list[idx])
             if timer % 60 == 0:
                 idx = 0 if idx == len(act_list)-1 else idx + 1
@@ -123,6 +128,6 @@ class GPTVisualizer:
 
 
 if __name__ == "__main__":
-    gv = GPTVisualizer('Brian :  ')
+    gv = GPTVisualizer('MIAPUSS:\nThou sha')
     gv.run_visualization()
     
