@@ -283,7 +283,7 @@ if __name__ == "__main__":
     eval_interval = 500
     eval_iters = 100
     val = dm.tokenizer.vocab_size
-    pretrained = "ShakesGPT.pth"
+    pretrained = None
 
     model = ShakesGPT(
         dm.tokenizer.vocab_size, embed_size=128, block_size=block_size, num_heads=4, num_layers=4
