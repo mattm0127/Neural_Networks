@@ -5,18 +5,18 @@ from pathlib import Path
 
 class ModelManager:
 
-    def __init__(self, weight_path: str, data_path: str, prompt: str):
+    def __init__(self, weight_path: str, data_path: str, t_path:str, prompt: str):
 
         self.weight_path = Path(weight_path)
         self.data_path = Path(data_path)
         self.prompt = prompt
 
-        self.dm = DataManager(self.data_path)
+        self.dm = DataManager(self.data_path, t_path)
         
         self.model = ShakesGPT(
             self.dm.tokenizer.vocab_size,
-            embed_size=128,
-            block_size=500,
+            embed_size=256,
+            block_size=100,
             num_heads=4,
             num_layers=4
         ).to(self.dm.device)
@@ -54,13 +54,14 @@ class ModelManager:
 
 class GPTVisualizer:
 
-    WEIGHT_PATH = r"ShakesGPT.pth"
+    WEIGHT_PATH = r"ShakesGPT_bpe.pth"
     DATA_PATH = r"LSTM\training_data\tiny_shakespear.txt"
+    VOCAB_PATH = r"GPT\shakes_bpe.json"
 
     def __init__(self, prompt: str):
         pygame.init()
         self.prompt = prompt
-        self.mm  = ModelManager(self.WEIGHT_PATH, self.DATA_PATH, self.prompt)
+        self.mm  = ModelManager(self.WEIGHT_PATH, self.DATA_PATH, self.VOCAB_PATH, self.prompt)
         self.screen = pygame.display.set_mode((1280, 720), pygame.RESIZABLE)
         self.screen_rect = self.screen.get_rect()
         self.clock = pygame.time.Clock()
@@ -74,7 +75,7 @@ class GPTVisualizer:
 
     def create_matrix(self, activation):
         embed_size = self.activations[activation].size()[-1]
-        block_size = len(self.prompt)
+        block_size = len(self.mm.dm.tokenizer.encode(self.prompt))
 
         act = self.activations[activation][0]
         act_min, act_max = act.min().item(), act.max().item()
@@ -95,7 +96,7 @@ class GPTVisualizer:
                 if color_intensity > 125:
                     pygame.draw.circle(surface, color, (center_x, center_y), 12)
                 else:
-                    pygame.draw.circle(surface, color, (center_x, center_y), 12, 1)
+                    pygame.draw.circle(surface, color, (center_x, center_y), 12)
         return surface
 
     def draw_title(self, text):
@@ -106,23 +107,69 @@ class GPTVisualizer:
         title_rect.top = self.screen_rect.top + 10
         self.screen.blit(title, title_rect)
 
+    def transform_layers(self)->dict[str, pygame.Surface]:
+        t_layers = {}
+
+        for key, layer in self.network_layers.items():
+            if key == 'Head Output':
+                t_layer = pygame.transform.smoothscale(layer, ((self.screen.get_width()-20), (self.screen.get_height()  // 3)-10))
+            else:
+                t_layer = pygame.transform.smoothscale(layer, ((self.screen.get_width() // 3)-20, (self.screen.get_height() // 3)-10))
+            t_layers[key] = t_layer
+        
+        return t_layers
+
+    def create_screen_surfaces(self, keys_list)->dict[str, pygame.Surface]:
+        block_width = self.screen.get_width() // 3
+        block_height = self.screen.get_height() // 3
+        screen_rect = self.screen.get_rect()
+        surfaces = []
+        for x in range(len(self.network_layers)):
+            if x == len(self.network_layers) - 1:
+                surface = pygame.Surface((self.screen.get_width(), block_height))
+            else:
+                surface = pygame.Surface((block_width, block_height))
+            surface.fill((0,0,0))
+            surface_rect = surface.get_rect()
+            surfaces.append((surface, surface_rect))
+        
+        finished_surfaces = {}
+        s_grid = [surfaces[:3], surfaces[3:6], surfaces[6]]
+        id = 0
+        for x in range(3):
+            if x < 2:
+                for y in range(3):
+                    s, s_rect = s_grid[x][y]
+                    s_rect.x = block_width * y
+                    s_rect.y = block_height * x
+                    finished_surfaces[keys_list[id]] = (s, s_rect)
+                    id += 1
+            else:
+                s, s_rect = s_grid[x]
+                s_rect.x = 0
+                s_rect.y = block_height * x
+                finished_surfaces[keys_list[id]] = (s, s_rect)
+            
+        return finished_surfaces
+    
+    def draw_layers(self):
+        t_layers = self.transform_layers()
+        t_keys = list(t_layers.keys())
+        surfaces = self.create_screen_surfaces(t_keys)
+
+        for key, layer in t_layers.items():
+            surface, surface_rect = surfaces[key]
+            layer_rect = layer.get_rect()
+            layer_rect.center = surface_rect.center
+            self.screen.blit(surface, surface_rect)
+            self.screen.blit(layer, layer_rect)
+
+
     def run_visualization(self):
-        act_list = list(self.activations.keys())
-        idx = 0
-        timer = 1
         while True:
             self._check_events()
             self.screen.fill((0,0,0))
-            screen_rect = self.screen.get_rect()
-            layer = self.network_layers[act_list[idx]]
-            t_layer = pygame.transform.smoothscale(layer, (self.screen.get_width()-20, self.screen.get_height()-80))
-            t_layer_rect = t_layer.get_rect(center=screen_rect.center)
-            self.screen.blit(t_layer, t_layer_rect)
-            self.draw_title(act_list[idx])
-            if timer % 60 == 0:
-                idx = 0 if idx == len(act_list)-1 else idx + 1
-                timer = 0
-            timer += 1
+            self.draw_layers()
             pygame.display.flip()
             self.clock.tick(60)
 

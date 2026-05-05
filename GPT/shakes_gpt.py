@@ -3,17 +3,17 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch import nn
 from pathlib import Path
+import tokenizers as t
 
 import time
 import string
 
 
 class Tokenizer:
-    def __init__(self, text, device):
-        self.text = text
-        self.vocab, self.vocab_size = self._generate_vocab()
-        self.word_map = {w: i for i, w in enumerate(self.vocab)}
-        self.int_map = {i: w for i, w in enumerate(self.vocab)}
+    def __init__(self, t_file, device):
+        self.tokenizer = t.Tokenizer.from_file(t_file)
+        self.tokenizer.decoder = t.decoders.ByteLevel()
+        self.vocab_size = self.tokenizer.get_vocab_size()
         self.device = device
 
     def _generate_vocab(self):
@@ -21,24 +21,23 @@ class Tokenizer:
         return vocab, len(vocab)
     
     def encode(self, x: str) -> list[int]:
-        return [self.word_map[i] for i in x]
+        return self.tokenizer.encode(x).ids
 
     def decode(self, x: list[int]) -> str:
         if isinstance (x, torch.Tensor):
             x = x.tolist()
-        decode_text = [self.int_map[i] for i in x]
-        return "".join(decode_text)
+        return self.tokenizer.decode(x)
     
     def to_tensor(self, x: list[int])->torch.Tensor:
         return torch.tensor([x], dtype=torch.long, device=self.device)
 
 
 class DataManager:
-    def __init__(self, data_path):
+    def __init__(self, data_path, t_file):
         self.data_path = Path(data_path)
         self.text = self.data_path.read_text(encoding="utf-8")
         self.device = self._get_device()
-        self.tokenizer = Tokenizer(self.text, self.device)
+        self.tokenizer = Tokenizer(t_file, self.device)
         self.train_data, self.test_data = self._split_data()
 
     def _get_device(self):
@@ -253,7 +252,7 @@ def train(
         optimizer.step()
         scheduler.step()
 
-    torch.save(save_weights, 'ShakesGPT.pth')
+    torch.save(save_weights, 'ShakesGPT_bpe.pth')
     print(f"Model saved with loss of {threshold}")
 
 @torch.no_grad()
@@ -274,19 +273,20 @@ def estimate_loss(
 
 
 if __name__ == "__main__":
-    path = r"LSTM\training_data\tiny_shakespear.txt"
-    dm = DataManager(path)
+    token_path = r"GPT\shakes_bpe.json"
+    text_path = r"LSTM\training_data\tiny_shakespear.txt"
+    dm = DataManager(text_path, token_path)
 
     batch_size = 64 
-    block_size = 500 #256
-    max_steps = 5000
+    block_size = 100
+    max_steps = 3000
     eval_interval = 500
     eval_iters = 100
     val = dm.tokenizer.vocab_size
     pretrained = None
 
     model = ShakesGPT(
-        dm.tokenizer.vocab_size, embed_size=128, block_size=block_size, num_heads=4, num_layers=4
+        dm.tokenizer.vocab_size, embed_size=256, block_size=block_size, num_heads=4, num_layers=4
     ).to(dm.device)
 
     if pretrained is None:
